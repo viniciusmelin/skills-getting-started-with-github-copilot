@@ -21,10 +21,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const spotsLeft = details.max_participants - details.participants.length;
 
         // Render participants section (show count, list if present, friendly text if empty)
+        // Each participant gets a delete button to unregister them.
         const participantsHtml =
           details.participants && details.participants.length
             ? `<ul class="participants-list">
-                 ${details.participants.map(participant => `<li><span class="participant-name">${participant}</span></li>`).join('')}
+                 ${details.participants.map(participant => `
+                   <li>
+                     <span class="participant-name">${participant}</span>
+                     <button class="participant-delete" data-activity="${encodeURIComponent(name)}" data-email="${encodeURIComponent(participant)}" title="Unregister">🗑️</button>
+                   </li>`).join('')}
                </ul>`
             : `<p class="participants-empty">No participants yet — be the first to sign up!</p>`;
 
@@ -72,11 +77,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (response.ok) {
         messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        // keep the base "message" class so margins/borders apply
+        messageDiv.className = "message success";
         signupForm.reset();
+        // Refresh the list so the newly-registered participant appears without a full page reload
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        messageDiv.className = "message error";
       }
 
       messageDiv.classList.remove("hidden");
@@ -87,9 +95,36 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 5000);
     } catch (error) {
       messageDiv.textContent = "Failed to sign up. Please try again.";
-      messageDiv.className = "error";
+      messageDiv.className = "message error";
       messageDiv.classList.remove("hidden");
       console.error("Error signing up:", error);
+    }
+  });
+
+  // Event delegation for unregister (delete) buttons
+  activitiesList.addEventListener("click", async (event) => {
+    const btn = event.target.closest('.participant-delete');
+    if (!btn) return;
+
+    const activity = decodeURIComponent(btn.dataset.activity);
+    const email = decodeURIComponent(btn.dataset.email);
+
+    if (!activity || !email) return;
+
+    if (!confirm(`Unregister ${email} from ${activity}?`)) return;
+
+    try {
+      const resp = await fetch(`/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`, { method: 'POST' });
+      const result = await resp.json();
+      if (resp.ok) {
+        // Refresh the activities list to reflect change
+        fetchActivities();
+      } else {
+        alert(result.detail || 'Failed to unregister participant');
+      }
+    } catch (err) {
+      console.error('Error unregistering participant:', err);
+      alert('Failed to unregister participant. Check console for details.');
     }
   });
 
